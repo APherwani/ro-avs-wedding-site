@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-cream: #FDF6EC;
+  --color-cream-dark: #F5E6CC;
+  --color-gold: #C9A84C;
+  --color-gold-light: #E8D5A3;
+  --color-gold-dark: #A67C37;
+  --color-maroon: #800020;
+  --color-maroon-light: #A0324F;
+  --color-maroon-dark: #5C0015;
+  --color-burgundy: #6B1D3A;
+  --color-deep-red: #8B1A1A;
+  --color-ivory: #FFFFF0;
+  --color-charcoal: #2C2C2C;
+
+  --font-display: var(--font-playfair);
+  --font-body: var(--font-cormorant);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-charcoal);
+}
+
+/* Gold ornamental divider */
+.ornament-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem 0;
+}
+
+.ornament-divider::before,
+.ornament-divider::after {
+  content: "";
+  height: 1px;
+  width: 80px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--color-gold),
+    transparent
+  );
+}
+
+/* Mandala decorative corners */
+.mandala-corner {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  opacity: 0.15;
+}
+
+/* Fade-in animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out forwards;
+}
+
+/* Shimmer animation for gold elements */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.gold-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-gold-dark),
+    var(--color-gold),
+    var(--color-gold-light),
+    var(--color-gold),
+    var(--color-gold-dark)
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 4s linear infinite;
+}
+
+/* Placeholder image styling */
+.img-placeholder {
+  background: linear-gradient(135deg, var(--color-cream-dark) 0%, var(--color-gold-light) 50%, var(--color-cream-dark) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-gold-dark);
+  font-family: var(--font-display);
+}
+
+/* Paisley pattern overlay */
+.paisley-bg {
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5c-8 0-15 7-15 15s7 15 15 15 15-7 15-15S38 5 30 5zm0 25c-5.5 0-10-4.5-10-10s4.5-10 10-10 10 4.5 10 10-4.5 10-10 10z' fill='%23C9A84C' fill-opacity='0.05'/%3E%3C/svg%3E");
+}
+
+/* Section transition */
+section {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Scroll-triggered animations */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
