@@ -1,12 +1,13 @@
 "use client";
 
-import { ourStory } from "@/config/content";
+import { useSiteConfig } from "@/config/SiteConfigContext";
 import { images } from "@/config/images";
 import { SectionTitle } from "./Decorative";
 import ImageWithPlaceholder from "./ImageWithPlaceholder";
 import { useReveal } from "@/hooks/useReveal";
 
 export default function OurStory() {
+  const { ourStory } = useSiteConfig();
   const ref = useReveal();
 
   return (

@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "preview": "next build && npx wrangler pages dev out",
+    "db:migrate": "npx wrangler d1 execute ro-avs-wedding-rsvps --file=./schema.sql",
+    "db:migrate:remote": "npx wrangler d1 execute ro-avs-wedding-rsvps --remote --file=./schema.sql"
   },
   "dependencies": {
     "next": "16.1.6",
@@ -14,6 +17,7 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260303.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -1,7 +1,11 @@
-import { couple, weddingDate } from "@/config/content";
+"use client";
+
+import { useSiteConfig } from "@/config/SiteConfigContext";
 import { OrnamentDivider } from "./Decorative";
 
 export default function Footer() {
+  const { couple, weddingDate } = useSiteConfig();
+
   return (
     <footer className="bg-charcoal text-cream py-16 px-6">
       <div className="max-w-4xl mx-auto text-center">

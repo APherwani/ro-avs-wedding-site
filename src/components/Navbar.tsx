@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { couple } from "@/config/content";
+import { useSiteConfig } from "@/config/SiteConfigContext";
 
 const navLinks = [
   { label: "Home", href: "#home" },
@@ -12,6 +12,7 @@ const navLinks = [
 ];
 
 export default function Navbar() {
+  const { couple } = useSiteConfig();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 

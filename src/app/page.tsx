@@ -1,3 +1,5 @@
+"use client";
+
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import OurStory from "@/components/OurStory";
@@ -6,10 +8,11 @@ import Gallery from "@/components/Gallery";
 import Venue from "@/components/Venue";
 import RSVP from "@/components/RSVP";
 import Footer from "@/components/Footer";
+import { SiteConfigProvider } from "@/config/SiteConfigContext";
 
 export default function Home() {
   return (
-    <>
+    <SiteConfigProvider>
       <Navbar />
       <Hero />
       <OurStory />
@@ -18,6 +21,6 @@ export default function Home() {
       <Venue />
       <RSVP />
       <Footer />
-    </>
+    </SiteConfigProvider>
   );
 }

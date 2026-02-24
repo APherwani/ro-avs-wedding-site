@@ -1,12 +1,12 @@
 "use client";
 
-import { events } from "@/config/content";
+import { useSiteConfig } from "@/config/SiteConfigContext";
 import { images } from "@/config/images";
 import { SectionTitle } from "./Decorative";
 import ImageWithPlaceholder from "./ImageWithPlaceholder";
 import { useReveal } from "@/hooks/useReveal";
 
-const eventImages = [
+const fallbackImages = [
   images.mehendiEvent,
   images.sangeetEvent,
   images.weddingEvent,
@@ -44,6 +44,7 @@ const eventIcons = [
 ];
 
 export default function Events() {
+  const { events } = useSiteConfig();
   const ref = useReveal();
 
   return (
@@ -63,7 +64,7 @@ export default function Events() {
               <div className={`${i % 2 === 1 ? "md:order-2" : ""}`}>
                 <div className="aspect-[16/10] rounded-lg overflow-hidden shadow-lg border border-gold/10">
                   <ImageWithPlaceholder
-                    src={eventImages[i]}
+                    src={event.image || fallbackImages[i] || fallbackImages[0]}
                     alt={event.name}
                     fill
                     className="object-cover"
@@ -75,7 +76,7 @@ export default function Events() {
               {/* Details */}
               <div className={`${i % 2 === 1 ? "md:order-1" : ""}`}>
                 <div className="bg-white/80 backdrop-blur-sm rounded-xl p-8 shadow-sm border border-gold/10">
-                  <div className="text-gold mb-4">{eventIcons[i]}</div>
+                  <div className="text-gold mb-4">{eventIcons[i] || eventIcons[0]}</div>
                   <h3 className="font-display text-3xl text-maroon font-bold mb-3">
                     {event.name}
                   </h3>

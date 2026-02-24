@@ -1,4 +1,21 @@
 {
-  "name": "ro-avs-wedding",
-  "pages_build_output_dir": "out"
+	"name": "ro-avs-wedding",
+	"pages_build_output_dir": "out",
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "ro-avs-wedding-rsvps",
+			"database_id": "eee497ab-2898-4964-80f8-803beecb810f"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "IMAGES",
+			"bucket_name": "ro-avs-wedding-images"
+		},
+		{
+			"bucket_name": "ro-avs-wedding-images",
+			"binding": "ro_avs_wedding_images"
+		}
+	]
 }

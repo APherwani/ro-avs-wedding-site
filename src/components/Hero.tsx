@@ -1,12 +1,14 @@
 "use client";
 
-import { couple, weddingDate } from "@/config/content";
+import { useSiteConfig } from "@/config/SiteConfigContext";
 import { images } from "@/config/images";
 import { MandalaCorner } from "./Decorative";
 import CountdownTimer from "./CountdownTimer";
 import ImageWithPlaceholder from "./ImageWithPlaceholder";
 
 export default function Hero() {
+  const { couple, weddingDate } = useSiteConfig();
+
   return (
     <section id="home" className="relative min-h-screen flex items-center justify-center">
       {/* Background image */}
