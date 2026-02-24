@@ -1,37 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ro & Avs Wedding Website
+
+An Indian-style wedding website built with Next.js, TypeScript, and Tailwind CSS.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to view the site.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Customizing Content
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+All wedding details live in two config files:
 
-## Learn More
+### `src/config/content.ts`
 
-To learn more about Next.js, take a look at the following resources:
+Edit couple names, wedding date, story text, event details (Mehendi, Sangeet, Wedding, Reception), and venue info.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### `src/config/images.ts`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+All image paths are centralized here. To swap photos:
 
-## Deploy on Vercel
+1. Add your images to `/public/images/`
+2. Update the corresponding path in `src/config/images.ts`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Available image slots:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# ro-avs-wedding-site
+| Key | Description |
+|-----|-------------|
+| `hero` | Full-screen hero background |
+| `groomPortrait` | Groom's portrait |
+| `bridePortrait` | Bride's portrait |
+| `coupleStory` | Our Story section photo |
+| `mehendiEvent` | Mehendi event card |
+| `sangeetEvent` | Sangeet event card |
+| `weddingEvent` | Wedding event card |
+| `receptionEvent` | Reception event card |
+| `gallery` | Array of gallery photos |
+| `venue` | Venue photo |
+
+Until real photos are added, the site displays placeholder graphics.
+
+## Site Sections
+
+- **Hero** — Couple names, date, hashtag, and live countdown timer
+- **Our Story** — Photo and love story text
+- **Events** — Mehendi, Sangeet, Wedding Ceremony, Reception with dates, times, venues, and dress codes
+- **Gallery** — Masonry photo grid with hover effects
+- **Venue** — Venue details and map link
+- **RSVP** — Guest form with name, email, guest count, event selection, dietary needs, and message
+- **Footer** — Couple names and hashtag
+
+## Tech Stack
+
+- [Next.js](https://nextjs.org) (App Router)
+- TypeScript
+- Tailwind CSS
+- Playfair Display + Cormorant Garamond fonts
+
+## Deployment
+
+```bash
+npm run build
+```
+
+Deploy the output to Vercel, Netlify, or any static hosting provider.
