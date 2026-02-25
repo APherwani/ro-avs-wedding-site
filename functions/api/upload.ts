@@ -2,8 +2,7 @@ import { requireAdmin } from "../_shared/auth";
 
 interface Env {
   IMAGES: R2Bucket;
-  ADMIN_PASSWORD: string;
-  R2_PUBLIC_URL: string;
+  AUTH_SECRET: string;
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -20,20 +19,9 @@ const VALID_FOLDERS = ["gallery", "events"];
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const authError = await requireAdmin(
     context.request,
-    context.env.ADMIN_PASSWORD
+    context.env.AUTH_SECRET
   );
   if (authError) return authError;
-
-  if (!context.env.R2_PUBLIC_URL) {
-    return Response.json(
-      {
-        success: false,
-        error:
-          "R2_PUBLIC_URL environment variable is not configured. Set it in Cloudflare Pages settings.",
-      },
-      { status: 500 }
-    );
-  }
 
   try {
     const formData = await context.request.formData();
@@ -81,8 +69,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       },
     });
 
-    const publicUrl = context.env.R2_PUBLIC_URL.replace(/\/$/, "");
-    const url = `${publicUrl}/${key}`;
+    // Serve through our own /api/images/ proxy — no public R2 URL needed
+    const url = `/api/images/${key}`;
 
     return Response.json({ success: true, key, url }, { status: 201 });
   } catch (err) {
@@ -99,7 +87,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const authError = await requireAdmin(
     context.request,
-    context.env.ADMIN_PASSWORD
+    context.env.AUTH_SECRET
   );
   if (authError) return authError;
 

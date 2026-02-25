@@ -1,3 +1,33 @@
+export async function createToken(secret: string): Promise<string> {
+  const payload = {
+    role: "admin",
+    exp: Math.floor(Date.now() / 1000) + 86400, // 24 hour expiry
+  };
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const payloadStr = JSON.stringify(payload);
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(payloadStr)
+  );
+
+  const payloadB64 = btoa(payloadStr);
+  const signatureB64 = btoa(
+    String.fromCharCode(...new Uint8Array(signature))
+  );
+
+  return `${payloadB64}.${signatureB64}`;
+}
+
 export async function verifyToken(
   token: string,
   password: string

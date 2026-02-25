@@ -12,10 +12,6 @@
 		{
 			"binding": "IMAGES",
 			"bucket_name": "ro-avs-wedding-images"
-		},
-		{
-			"bucket_name": "ro-avs-wedding-images",
-			"binding": "ro_avs_wedding_images"
 		}
 	]
 }

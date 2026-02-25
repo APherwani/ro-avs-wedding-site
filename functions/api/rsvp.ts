@@ -2,7 +2,7 @@ import { requireAdmin } from "../_shared/auth";
 
 interface Env {
   DB: D1Database;
-  ADMIN_PASSWORD: string;
+  AUTH_SECRET: string;
 }
 
 const VALID_EVENTS = ["Mehendi", "Sangeet", "Wedding", "Reception"];
@@ -80,7 +80,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const authError = await requireAdmin(
     context.request,
-    context.env.ADMIN_PASSWORD
+    context.env.AUTH_SECRET
   );
   if (authError) return authError;
 
@@ -127,7 +127,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const authError = await requireAdmin(
     context.request,
-    context.env.ADMIN_PASSWORD
+    context.env.AUTH_SECRET
   );
   if (authError) return authError;
 

@@ -2,7 +2,7 @@ import { requireAdmin } from "../_shared/auth";
 
 interface Env {
   DB: D1Database;
-  ADMIN_PASSWORD: string;
+  AUTH_SECRET: string;
 }
 
 // --- GET /api/config - Public, returns site config ---
@@ -35,7 +35,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   const authError = await requireAdmin(
     context.request,
-    context.env.ADMIN_PASSWORD
+    context.env.AUTH_SECRET
   );
   if (authError) return authError;
 

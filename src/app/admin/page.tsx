@@ -27,66 +27,55 @@ function clearToken() {
   sessionStorage.removeItem("admin_token");
 }
 
+// --- OAuth error messages ---
+
+function getOAuthErrorMessage(code: string): string {
+  const messages: Record<string, string> = {
+    access_denied: "Google sign-in was cancelled.",
+    missing_params: "Invalid OAuth response. Please try again.",
+    invalid_state: "Session expired. Please try again.",
+    token_exchange_failed: "Failed to authenticate with Google. Please try again.",
+    userinfo_failed: "Could not retrieve your Google account info.",
+    email_not_verified: "Your Google email is not verified.",
+    not_authorized: "Your Google account is not authorized to access admin.",
+  };
+  return messages[code] || "Authentication failed. Please try again.";
+}
+
 // --- Login Form ---
 
-function LoginForm({ onLogin }: { onLogin: () => void }) {
-  const [password, setPassword] = useState("");
+function LoginForm() {
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/admin/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setError(data.error || "Invalid password");
-        return;
-      }
-
-      setToken(data.token);
-      onLogin();
-    } catch {
-      setError("Connection failed. Please try again.");
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith("#error=")) {
+      setError(getOAuthErrorMessage(hash.slice(7)));
+      history.replaceState(null, "", window.location.pathname);
     }
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-cream flex items-center justify-center px-6">
-      <div className="w-full max-w-sm">
-        <h1 className="font-display text-3xl text-maroon text-center mb-8">
+      <div className="w-full max-w-sm text-center">
+        <h1 className="font-display text-3xl text-maroon mb-8">
           Admin Login
         </h1>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter password"
-            required
-            className="w-full border border-gold/30 rounded-lg px-4 py-3 font-body text-lg text-charcoal bg-white focus:outline-none focus:border-gold transition-colors"
-          />
-          {error && (
-            <p className="text-deep-red font-body text-sm">{error}</p>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-maroon text-gold font-display text-lg font-bold py-3 rounded-lg hover:bg-maroon-dark transition-colors disabled:opacity-50"
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
+        {error && (
+          <p className="text-deep-red font-body text-sm mb-4">{error}</p>
+        )}
+        <button
+          onClick={() => { window.location.href = "/api/admin/auth/google"; }}
+          className="w-full bg-white border border-gold/30 rounded-lg px-4 py-3 font-body text-lg text-charcoal hover:bg-cream/50 transition-colors flex items-center justify-center gap-3 shadow-sm"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Sign in with Google
+        </button>
       </div>
     </div>
   );
@@ -412,9 +401,9 @@ async function deleteImage(url: string): Promise<void> {
   const token = getToken();
   if (!token) return;
 
-  // Extract key: last 2 path segments (e.g. "gallery/uuid.jpg")
-  const parts = new URL(url).pathname.split("/");
-  const key = parts.slice(-2).join("/");
+  // URLs are like "/api/images/gallery/uuid.jpg" — extract the R2 key after "/api/images/"
+  const prefix = "/api/images/";
+  const key = url.startsWith(prefix) ? url.slice(prefix.length) : url;
 
   await fetch(`/api/upload?key=${encodeURIComponent(key)}`, {
     method: "DELETE",
@@ -608,7 +597,7 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    e.target.value = "";
+    e.target.value = ""; // clear after capturing file reference
 
     const result = await uploadImage(file, "events");
     if (result.success && result.url) {
@@ -633,11 +622,12 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
   ) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    const fileArray = Array.from(files); // snapshot before clearing
     e.target.value = "";
     setGalleryUploading(true);
 
     const newUrls: string[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of fileArray) {
       const result = await uploadImage(file, "gallery");
       if (result.success && result.url) {
         newUrls.push(result.url);
@@ -1224,8 +1214,26 @@ export default function AdminPage() {
     setRsvps([]);
   };
 
-  // Check for existing session on mount
+  // Check for OAuth callback token or existing session on mount
   useEffect(() => {
+    const hash = window.location.hash;
+
+    // OAuth callback — token passed in URL hash
+    if (hash.startsWith("#token=")) {
+      const token = hash.slice(7);
+      setToken(token);
+      setAuthed(true);
+      history.replaceState(null, "", window.location.pathname);
+      return;
+    }
+
+    // OAuth error — handled by LoginForm, just clear loading
+    if (hash.startsWith("#error=")) {
+      setLoading(false);
+      return;
+    }
+
+    // Existing session
     if (getToken()) {
       setAuthed(true);
     } else {
@@ -1241,7 +1249,7 @@ export default function AdminPage() {
   }, [authed, fetchRsvps]);
 
   if (!authed) {
-    return <LoginForm onLogin={() => setAuthed(true)} />;
+    return <LoginForm />;
   }
 
   return (
