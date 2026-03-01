@@ -34,29 +34,28 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   try {
     const formData = await context.request.formData();
-    const file = formData.get("file");
-    const folder = formData.get("folder");
+    const file = formData.get("file") as unknown;
+    const folder = formData.get("folder") as unknown;
 
     // Debug: log all form data keys to see what the server actually received
     const formKeys: string[] = [];
     formData.forEach((_val, key) => formKeys.push(key));
     console.log("[upload] FormData keys:", formKeys.join(", ") || "(empty)");
-    console.log("[upload] FormData 'file' value — typeof:", typeof file, "isNull:", file === null, "constructor:", file?.constructor?.name);
+    console.log("[upload] FormData 'file' value — typeof:", typeof file, "isNull:", file === null, "constructor:", (file as Record<string, unknown>)?.constructor?.name);
     console.log("[upload] FormData 'folder' value:", folder);
 
-    // In Workers runtime, formData.get() returns a File for file fields and a string for text fields.
-    // Use typeof check: if it's a string, it's not a file upload.
-    if (!file || typeof file === "string") {
-      console.log("[upload] Rejected: no file or got a string instead of File, got:", typeof file, String(file)?.slice(0, 100));
+    // Workers FormData.get() returns a File (Blob subclass) for file fields, string for text fields.
+    // @cloudflare/workers-types incorrectly types it as `string | null`, so we cast to `unknown`
+    // above and do a runtime duck-type check here.
+    if (!file || typeof file !== "object" || !("name" in (file as object)) || !("stream" in (file as object))) {
+      console.log("[upload] Rejected: not a valid File object. typeof:", typeof file);
       return Response.json(
         { success: false, error: "No file provided" },
         { status: 400 }
       );
     }
 
-    // Cast once — Workers FormData returns File for file fields, but @cloudflare/workers-types
-    // types FormDataEntryValue as string only, so TS narrows to `never` above.
-    const uploadFile = file as unknown as File;
+    const uploadFile = file as File;
     console.log("[upload] File details — name:", uploadFile.name, "size:", uploadFile.size, "type:", uploadFile.type);
 
     if (typeof folder !== "string" || !VALID_FOLDERS.includes(folder)) {
