@@ -711,19 +711,19 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
         </h3>
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Bride Name</label>
-            <input
-              className={inputClass}
-              value={config.couple.bride}
-              onChange={(e) => updateCouple("bride", e.target.value)}
-            />
-          </div>
-          <div>
             <label className={labelClass}>Groom Name</label>
             <input
               className={inputClass}
-              value={config.couple.groom}
+              value={config.couple.bride}
               onChange={(e) => updateCouple("groom", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Bride Name</label>
+            <input
+              className={inputClass}
+              value={config.couple.groom}
+              onChange={(e) => updateCouple("bride", e.target.value)}
             />
           </div>
           <div>
