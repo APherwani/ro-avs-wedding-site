@@ -1,6 +1,7 @@
 {
 	"name": "ro-avs-wedding",
 	"pages_build_output_dir": "out",
+	"compatibility_date": "2025-09-23",
 	"d1_databases": [
 		{
 			"binding": "DB",

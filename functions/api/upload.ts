@@ -47,10 +47,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // Workers FormData.get() returns a File (Blob subclass) for file fields, string for text fields.
     // @cloudflare/workers-types incorrectly types it as `string | null`, so we cast to `unknown`
     // above and do a runtime duck-type check here.
+    const fileLike = file as Record<string, unknown>;
+    const debugInfo = {
+      typeof: typeof file,
+      isNull: file === null,
+      constructor: fileLike?.constructor?.name ?? "unknown",
+      hasSize: typeof fileLike?.size,
+      hasType: typeof fileLike?.type,
+      hasStream: "stream" in ((fileLike ?? {}) as object),
+      hasName: "name" in ((fileLike ?? {}) as object),
+      formKeys,
+    };
     if (!file || typeof file !== "object" || !("name" in (file as object)) || !("stream" in (file as object))) {
-      console.log("[upload] Rejected: not a valid File object. typeof:", typeof file);
+      console.log("[upload] Rejected: not a valid File object:", JSON.stringify(debugInfo));
       return Response.json(
-        { success: false, error: "No file provided" },
+        { success: false, error: "No file provided", debug: debugInfo },
         { status: 400 }
       );
     }
