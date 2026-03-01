@@ -18,6 +18,7 @@ const VALID_FOLDERS = ["gallery", "events"];
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   console.log("[upload] POST /api/upload - start");
+  console.log("[upload] Request Content-Type:", context.request.headers.get("content-type"));
   console.log("[upload] AUTH_SECRET present:", !!context.env.AUTH_SECRET);
   console.log("[upload] IMAGES binding present:", !!context.env.IMAGES);
 
@@ -36,19 +37,27 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const file = formData.get("file");
     const folder = formData.get("folder");
 
-    const isFile = typeof file === "object" && file !== null && "name" in file;
-    console.log("[upload] FormData parsed — file:", isFile ? `${(file as File).name} (${(file as File).size} bytes, ${(file as File).type})` : String(file));
-    console.log("[upload] folder:", folder);
+    // Debug: log all form data keys to see what the server actually received
+    const formKeys: string[] = [];
+    formData.forEach((_val, key) => formKeys.push(key));
+    console.log("[upload] FormData keys:", formKeys.join(", ") || "(empty)");
+    console.log("[upload] FormData 'file' value — typeof:", typeof file, "isNull:", file === null, "constructor:", file?.constructor?.name);
+    console.log("[upload] FormData 'folder' value:", folder);
 
-    if (!file || !isFile) {
-      console.log("[upload] Rejected: no file or not a File instance, got:", typeof file);
+    // In Workers runtime, formData.get() returns a File for file fields and a string for text fields.
+    // Use typeof check: if it's a string, it's not a file upload.
+    if (!file || typeof file === "string") {
+      console.log("[upload] Rejected: no file or got a string instead of File, got:", typeof file, String(file)?.slice(0, 100));
       return Response.json(
         { success: false, error: "No file provided" },
         { status: 400 }
       );
     }
 
-    const uploadFile = file as File;
+    // Cast once — Workers FormData returns File for file fields, but @cloudflare/workers-types
+    // types FormDataEntryValue as string only, so TS narrows to `never` above.
+    const uploadFile = file as unknown as File;
+    console.log("[upload] File details — name:", uploadFile.name, "size:", uploadFile.size, "type:", uploadFile.type);
 
     if (typeof folder !== "string" || !VALID_FOLDERS.includes(folder)) {
       console.log("[upload] Rejected: invalid folder value:", folder);
