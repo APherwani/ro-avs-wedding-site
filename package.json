@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "preview": "next build && npx wrangler pages dev out",
+    "preview": "next build && npx wrangler pages dev out --r2=IMAGES --d1=DB",
+    "deploy": "next build && npx wrangler pages deploy out",
     "db:migrate": "npx wrangler d1 execute ro-avs-wedding-rsvps --file=./schema.sql",
     "db:migrate:remote": "npx wrangler d1 execute ro-avs-wedding-rsvps --remote --file=./schema.sql"
   },

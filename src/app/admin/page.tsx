@@ -374,10 +374,16 @@ async function uploadImage(
   file: File,
   folder: "gallery" | "events"
 ): Promise<{ success: boolean; url?: string; error?: string }> {
+  console.log(`[uploadImage] Starting upload — file: ${file.name}, size: ${file.size}, type: ${file.type}, folder: ${folder}`);
+
   const token = getToken();
-  if (!token) return { success: false, error: "Not authenticated" };
+  if (!token) {
+    console.warn("[uploadImage] No auth token found");
+    return { success: false, error: "Not authenticated" };
+  }
 
   if (file.size > 10 * 1024 * 1024) {
+    console.warn("[uploadImage] File too large:", file.size);
     return { success: false, error: "File too large (max 10MB)" };
   }
 
@@ -386,29 +392,59 @@ async function uploadImage(
   formData.append("folder", folder);
 
   try {
+    console.log("[uploadImage] Sending POST /api/upload...");
     const res = await fetch("/api/upload", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
-    return await res.json();
-  } catch {
-    return { success: false, error: "Upload failed" };
+
+    console.log(`[uploadImage] Response: ${res.status} ${res.statusText}`);
+
+    if (!res.ok) {
+      let errorDetail: string;
+      try {
+        const data = await res.json();
+        errorDetail = data.error || `HTTP ${res.status}`;
+        console.error("[uploadImage] Server error response:", data);
+      } catch {
+        const text = await res.text();
+        errorDetail = `HTTP ${res.status}: ${res.statusText}`;
+        console.error("[uploadImage] Non-JSON error response:", text.slice(0, 500));
+      }
+      return { success: false, error: errorDetail };
+    }
+
+    const data = await res.json();
+    console.log("[uploadImage] Success response:", data);
+    return data;
+  } catch (err) {
+    console.error("[uploadImage] Network/fetch error:", err);
+    return { success: false, error: "Upload failed — check console for details" };
   }
 }
 
 async function deleteImage(url: string): Promise<void> {
   const token = getToken();
-  if (!token) return;
+  if (!token) {
+    console.warn("[deleteImage] No auth token found");
+    return;
+  }
 
   // URLs are like "/api/images/gallery/uuid.jpg" — extract the R2 key after "/api/images/"
   const prefix = "/api/images/";
   const key = url.startsWith(prefix) ? url.slice(prefix.length) : url;
+  console.log(`[deleteImage] Deleting key: ${key} (from url: ${url})`);
 
-  await fetch(`/api/upload?key=${encodeURIComponent(key)}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  }).catch(() => {});
+  try {
+    const res = await fetch(`/api/upload?key=${encodeURIComponent(key)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    console.log(`[deleteImage] Response: ${res.status} ${res.statusText}`);
+  } catch (err) {
+    console.error("[deleteImage] Network error:", err);
+  }
 }
 
 // --- Site Config Editor ---
@@ -596,10 +632,12 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
+    console.log(`[handleEventImageUpload] Event ${index} — file selected:`, file ? `${file.name} (${file.size} bytes, ${file.type})` : "none");
     if (!file) return;
     e.target.value = ""; // clear after capturing file reference
 
     const result = await uploadImage(file, "events");
+    console.log(`[handleEventImageUpload] Upload result:`, result);
     if (result.success && result.url) {
       updateEvent(index, "image", result.url);
     } else {
@@ -609,6 +647,7 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
 
   const handleRemoveEventImage = async (index: number) => {
     const url = config.events[index]?.image;
+    console.log(`[handleRemoveEventImage] Event ${index} — image url:`, url || "(none)");
     if (url) {
       await deleteImage(url);
     }
@@ -621,6 +660,7 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const files = e.target.files;
+    console.log(`[handleGalleryUpload] Files selected:`, files ? files.length : 0);
     if (!files || files.length === 0) return;
     const fileArray = Array.from(files); // snapshot before clearing
     e.target.value = "";
@@ -628,12 +668,18 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
 
     const newUrls: string[] = [];
     for (const file of fileArray) {
+      console.log(`[handleGalleryUpload] Uploading: ${file.name} (${file.size} bytes, ${file.type})`);
       const result = await uploadImage(file, "gallery");
+      console.log(`[handleGalleryUpload] Result for ${file.name}:`, result);
       if (result.success && result.url) {
         newUrls.push(result.url);
+      } else {
+        console.warn(`[handleGalleryUpload] Failed for ${file.name}:`, result.error);
+        setMessage({ type: "error", text: result.error || `Failed to upload ${file.name}` });
       }
     }
 
+    console.log(`[handleGalleryUpload] Total uploaded: ${newUrls.length}/${fileArray.length}`);
     if (newUrls.length > 0) {
       setConfig((prev) => ({
         ...prev,
@@ -645,6 +691,7 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
 
   const removeGalleryImage = async (index: number) => {
     const url = config.gallery[index];
+    console.log(`[removeGalleryImage] Removing index ${index}, url:`, url || "(none)");
     if (url) {
       await deleteImage(url);
     }
