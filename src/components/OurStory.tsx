@@ -18,7 +18,7 @@ export default function OurStory() {
         <div className="grid md:grid-cols-2 gap-12 items-center">
           {/* Photo */}
           <div className="relative">
-            <div className="aspect-[4/5] rounded-lg overflow-hidden shadow-xl border-4 border-gold/20">
+            <div className="relative aspect-[4/5] rounded-lg overflow-hidden shadow-xl border-4 border-gold/20">
               <ImageWithPlaceholder
                 src={images.coupleStory}
                 alt="Our Story"

@@ -48,11 +48,16 @@ function LoginForm() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let timeoutId: number | undefined;
     const hash = window.location.hash;
     if (hash.startsWith("#error=")) {
-      setError(getOAuthErrorMessage(hash.slice(7)));
+      const message = getOAuthErrorMessage(hash.slice(7));
+      timeoutId = window.setTimeout(() => setError(message), 0);
       history.replaceState(null, "", window.location.pathname);
     }
+    return () => {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
   }, []);
 
   return (
@@ -368,6 +373,78 @@ function reorder<T>(items: T[], from: number, to: number): T[] {
   return result;
 }
 
+// --- Client-side image compression ---
+
+async function compressImage(file: File): Promise<File> {
+  console.log(`[compressImage] Input: ${file.name} (${file.size} bytes, ${file.type})`);
+
+  // GIFs would lose animation through canvas — skip them
+  if (file.type === "image/gif") {
+    console.log("[compressImage] Skipping GIF (would lose animation)");
+    return file;
+  }
+  // Small files don't need compression
+  if (file.size < 500 * 1024) {
+    console.log("[compressImage] Skipping — file under 500KB threshold");
+    return file;
+  }
+
+  const MAX_DIMENSION = 2048;
+  const QUALITY = 0.85;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const origWidth = img.width;
+      const origHeight = img.height;
+      let { width, height } = img;
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        if (width >= height) {
+          height = Math.round((height * MAX_DIMENSION) / width);
+          width = MAX_DIMENSION;
+        } else {
+          width = Math.round((width * MAX_DIMENSION) / height);
+          height = MAX_DIMENSION;
+        }
+      }
+      console.log(`[compressImage] Dimensions: ${origWidth}x${origHeight} → ${width}x${height}`);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        console.warn("[compressImage] Could not get canvas 2D context — returning original");
+        resolve(file);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            console.warn("[compressImage] toBlob returned null — returning original");
+            resolve(file);
+            return;
+          }
+          const outName = file.name.replace(/\.[^.]+$/, ".jpg");
+          const compressed = new File([blob], outName, { type: "image/jpeg" });
+          console.log(`[compressImage] Done: ${file.size} → ${compressed.size} bytes (${Math.round((1 - compressed.size / file.size) * 100)}% reduction)`);
+          resolve(compressed);
+        },
+        "image/jpeg",
+        QUALITY
+      );
+    };
+    img.onerror = (err) => {
+      URL.revokeObjectURL(url);
+      console.warn("[compressImage] Image load error — returning original:", err);
+      resolve(file);
+    };
+    img.src = url;
+  });
+}
+
 // --- Image upload helper ---
 
 async function uploadImage(
@@ -387,8 +464,12 @@ async function uploadImage(
     return { success: false, error: "File too large (max 10MB)" };
   }
 
+  console.log("[uploadImage] Compressing...");
+  const compressed = await compressImage(file);
+  console.log(`[uploadImage] After compression: ${file.name} ${file.size} → ${compressed.name} ${compressed.size} bytes`);
+
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append("file", compressed);
   formData.append("folder", folder);
 
   try {
@@ -761,7 +842,7 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
             <label className={labelClass}>Groom Name</label>
             <input
               className={inputClass}
-              value={config.couple.bride}
+              value={config.couple.groom}
               onChange={(e) => updateCouple("groom", e.target.value)}
             />
           </div>
@@ -769,7 +850,7 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
             <label className={labelClass}>Bride Name</label>
             <input
               className={inputClass}
-              value={config.couple.groom}
+              value={config.couple.bride}
               onChange={(e) => updateCouple("bride", e.target.value)}
             />
           </div>
@@ -1020,6 +1101,7 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
                   <label className={labelClass}>Event Image</label>
                   {event.image ? (
                     <div className="flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={event.image}
                         alt={event.name}
@@ -1118,6 +1200,7 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
                       : "border-transparent"
                   } ${galleryDragIdx === i ? "opacity-40" : ""}`}
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={url}
                     alt={`Gallery ${i + 1}`}

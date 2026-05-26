@@ -11,6 +11,16 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to view the site.
 
+For the full RSVP/admin/API flow, use the Cloudflare Pages preview instead:
+
+```bash
+npm run db:migrate
+npm run preview
+```
+
+Open the local Wrangler URL shown in the terminal, usually
+[http://localhost:8788](http://localhost:8788).
+
 ## Customizing Content
 
 All wedding details live in two config files:
@@ -66,4 +76,6 @@ Until real photos are added, the site displays placeholder graphics.
 npm run build
 ```
 
-Deploy the output to Vercel, Netlify, or any static hosting provider.
+Deploy with Cloudflare Pages so the `/functions` API routes, D1 database, and
+R2 image bucket are available. A plain static host can render the site, but
+RSVPs, admin login, config editing, and image uploads will not work there.

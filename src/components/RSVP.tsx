@@ -47,12 +47,16 @@ export default function RSVP() {
         body: JSON.stringify(formData),
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(
-          data.details?.join(", ") || data.error || "Something went wrong"
-        );
+        let message = "RSVP service is unavailable. Please try again later.";
+        if (res.headers.get("content-type")?.includes("application/json")) {
+          const data = await res.json();
+          message =
+            data.details?.join(", ") ||
+            data.error ||
+            "Something went wrong";
+        }
+        throw new Error(message);
       }
 
       setSubmitted(true);

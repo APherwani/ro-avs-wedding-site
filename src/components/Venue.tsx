@@ -16,7 +16,7 @@ export default function Venue() {
         <SectionTitle title="Venue" subtitle="Where the magic happens" />
 
         <div className="grid md:grid-cols-2 gap-10 items-center">
-          <div className="aspect-[16/10] rounded-lg overflow-hidden shadow-xl border border-gold/10">
+          <div className="relative aspect-[16/10] rounded-lg overflow-hidden shadow-xl border border-gold/10">
             <ImageWithPlaceholder
               src={images.venue}
               alt="Wedding venue"

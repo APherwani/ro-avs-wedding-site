@@ -62,7 +62,7 @@ export default function Events() {
             >
               {/* Image */}
               <div className={`${i % 2 === 1 ? "md:order-2" : ""}`}>
-                <div className="aspect-[16/10] rounded-lg overflow-hidden shadow-lg border border-gold/10">
+                <div className="relative aspect-[16/10] rounded-lg overflow-hidden shadow-lg border border-gold/10">
                   <ImageWithPlaceholder
                     src={event.image || fallbackImages[i] || fallbackImages[0]}
                     alt={event.name}
