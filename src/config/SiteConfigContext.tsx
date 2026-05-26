@@ -37,6 +37,7 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
                 ? data.config.events
                 : defaultConfig.events,
             venue: { ...defaultConfig.venue, ...data.config.venue },
+            photos: { ...defaultConfig.photos, ...data.config.photos },
             gallery: Array.isArray(data.config.gallery)
               ? data.config.gallery
               : defaultConfig.gallery,

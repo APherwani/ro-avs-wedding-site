@@ -12,7 +12,7 @@ const ALLOWED_TYPES: Record<string, string> = {
   "image/webp": "webp",
   "image/gif": "gif",
 };
-const VALID_FOLDERS = ["gallery", "events"];
+const VALID_FOLDERS = ["gallery", "events", "site"];
 
 // --- POST /api/upload - Upload image to R2 (admin only) ---
 
@@ -72,7 +72,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (typeof folder !== "string" || !VALID_FOLDERS.includes(folder)) {
       console.log("[upload] Rejected: invalid folder value:", folder);
       return Response.json(
-        { success: false, error: "Invalid folder. Must be 'gallery' or 'events'" },
+        { success: false, error: "Invalid folder. Must be 'gallery', 'events', or 'site'" },
         { status: 400 }
       );
     }

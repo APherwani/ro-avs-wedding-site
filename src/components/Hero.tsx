@@ -7,14 +7,14 @@ import CountdownTimer from "./CountdownTimer";
 import ImageWithPlaceholder from "./ImageWithPlaceholder";
 
 export default function Hero() {
-  const { couple, weddingDate } = useSiteConfig();
+  const { couple, weddingDate, photos } = useSiteConfig();
 
   return (
     <section id="home" className="relative min-h-screen flex items-center justify-center">
       {/* Background image */}
       <div className="absolute inset-0">
         <ImageWithPlaceholder
-          src={images.hero}
+          src={photos.hero || images.hero}
           alt="Wedding hero"
           fill
           className="object-cover"

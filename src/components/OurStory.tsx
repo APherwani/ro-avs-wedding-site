@@ -7,7 +7,7 @@ import ImageWithPlaceholder from "./ImageWithPlaceholder";
 import { useReveal } from "@/hooks/useReveal";
 
 export default function OurStory() {
-  const { ourStory } = useSiteConfig();
+  const { ourStory, photos } = useSiteConfig();
   const ref = useReveal();
 
   return (
@@ -20,7 +20,7 @@ export default function OurStory() {
           <div className="relative">
             <div className="relative aspect-[4/5] rounded-lg overflow-hidden shadow-xl border-4 border-gold/20">
               <ImageWithPlaceholder
-                src={images.coupleStory}
+                src={photos.ourStory || images.coupleStory}
                 alt="Our Story"
                 fill
                 className="object-cover"

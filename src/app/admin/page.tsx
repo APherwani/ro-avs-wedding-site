@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { SiteConfig, EventConfig } from "@/config/types";
 import { defaultConfig } from "@/config/content";
+import { images } from "@/config/images";
 
 interface RsvpEntry {
   id: number;
@@ -348,6 +349,30 @@ const inputClass =
   "w-full border border-gold/30 rounded-lg px-3 py-2 font-body text-charcoal bg-white focus:outline-none focus:border-gold transition-colors";
 const labelClass =
   "block font-body text-sm text-charcoal/70 mb-1 font-semibold";
+type SitePhotoKey = keyof SiteConfig["photos"];
+
+const sitePhotoMeta: Record<
+  SitePhotoKey,
+  { label: string; placeholder: string; defaultSrc: string }
+> = {
+  hero: {
+    label: "Hero Photo",
+    placeholder: "/images/hero.jpg or /api/images/site/...",
+    defaultSrc: images.hero,
+  },
+  ourStory: {
+    label: "Our Story Photo",
+    placeholder: "/images/couple-story.jpg or /api/images/site/...",
+    defaultSrc: images.coupleStory,
+  },
+  venue: {
+    label: "Venue Photo",
+    placeholder: "/images/venue.jpg or /api/images/site/...",
+    defaultSrc: images.venue,
+  },
+};
+
+const sitePhotoFields = Object.keys(sitePhotoMeta) as SitePhotoKey[];
 
 // --- Drag gripper icon ---
 
@@ -449,7 +474,7 @@ async function compressImage(file: File): Promise<File> {
 
 async function uploadImage(
   file: File,
-  folder: "gallery" | "events"
+  folder: "gallery" | "events" | "site"
 ): Promise<{ success: boolean; url?: string; error?: string }> {
   console.log(`[uploadImage] Starting upload — file: ${file.name}, size: ${file.size}, type: ${file.type}, folder: ${folder}`);
 
@@ -545,6 +570,8 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
   const [eventUploadingIdx, setEventUploadingIdx] = useState<number | null>(
     null
   );
+  const [sitePhotoUploading, setSitePhotoUploading] =
+    useState<SitePhotoKey | null>(null);
 
   // Gallery drag state
   const [galleryDragIdx, setGalleryDragIdx] = useState<number | null>(null);
@@ -573,6 +600,7 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
                 ? data.config.events
                 : defaultConfig.events,
             venue: { ...defaultConfig.venue, ...data.config.venue },
+            photos: { ...defaultConfig.photos, ...data.config.photos },
             gallery: Array.isArray(data.config.gallery)
               ? data.config.gallery
               : defaultConfig.gallery,
@@ -707,6 +735,48 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
       ...prev,
       venue: { ...prev.venue, [field]: value },
     }));
+  };
+
+  const updatePhoto = (field: SitePhotoKey, value: string) => {
+    setConfig((prev) => ({
+      ...prev,
+      photos: { ...prev.photos, [field]: value },
+    }));
+  };
+
+  // --- Site photo upload ---
+
+  const handleSitePhotoUpload = async (
+    field: SitePhotoKey,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    console.log(`[handleSitePhotoUpload] ${field} — file selected:`, file ? `${file.name} (${file.size} bytes, ${file.type})` : "none");
+    if (!file) return;
+    e.target.value = "";
+
+    setSitePhotoUploading(field);
+    setMessage(null);
+    const result = await uploadImage(file, "site");
+    console.log("[handleSitePhotoUpload] Upload result:", result);
+    if (result.success && result.url) {
+      updatePhoto(field, result.url);
+      setMessage({
+        type: "success",
+        text: "Photo uploaded. Save changes to publish it.",
+      });
+    } else {
+      setMessage({ type: "error", text: result.error || "Upload failed" });
+    }
+    setSitePhotoUploading(null);
+  };
+
+  const handleClearSitePhoto = (field: SitePhotoKey) => {
+    updatePhoto(field, "");
+    setMessage({
+      type: "success",
+      text: "Photo cleared. Save changes to publish it.",
+    });
   };
 
   // --- Event image upload ---
@@ -913,6 +983,74 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
               placeholder="December 12, 2026"
             />
           </div>
+        </div>
+      </section>
+
+      {/* Site Photos */}
+      <section className="bg-white rounded-xl p-6 border border-gold/20 shadow-sm">
+        <h3 className="font-display text-xl text-maroon mb-4">Site Photos</h3>
+        <div className="grid md:grid-cols-3 gap-4">
+          {sitePhotoFields.map((field) => {
+            const meta = sitePhotoMeta[field];
+            const value = config.photos[field];
+            const previewSrc = value || meta.defaultSrc;
+            const uploading = sitePhotoUploading === field;
+
+            return (
+              <div
+                key={field}
+                className="border border-gold/15 rounded-lg p-4 bg-cream/30"
+              >
+                <label className={labelClass}>{meta.label}</label>
+                <div className="aspect-[16/10] rounded-lg overflow-hidden border border-gold/20 bg-cream-dark mb-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={previewSrc}
+                    alt={meta.label}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <input
+                  className={inputClass}
+                  value={value}
+                  onChange={(e) => updatePhoto(field, e.target.value)}
+                  placeholder={meta.placeholder}
+                />
+                <div className="flex flex-wrap items-center gap-3 mt-2">
+                  <label
+                    className={`text-xs font-body cursor-pointer transition-colors ${
+                      uploading
+                        ? "text-charcoal/40 cursor-wait"
+                        : "text-gold hover:text-gold-dark"
+                    }`}
+                  >
+                    {uploading
+                      ? "Uploading..."
+                      : value
+                        ? "Change Photo"
+                        : "Upload Photo"}
+                    {!uploading && (
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleSitePhotoUpload(field, e)}
+                      />
+                    )}
+                  </label>
+                  {value && (
+                    <button
+                      type="button"
+                      onClick={() => handleClearSitePhoto(field)}
+                      className="text-xs text-deep-red/70 hover:text-deep-red font-body"
+                    >
+                      Clear Photo
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 

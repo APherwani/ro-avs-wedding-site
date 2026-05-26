@@ -82,5 +82,11 @@ export const defaultConfig: SiteConfig = {
       "A stunning heritage property set amidst lush gardens, offering the perfect blend of traditional grandeur and modern elegance for our celebration.",
   },
 
+  photos: {
+    hero: "",
+    ourStory: "",
+    venue: "",
+  },
+
   gallery: [],
 };

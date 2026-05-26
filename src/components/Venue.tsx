@@ -7,7 +7,7 @@ import ImageWithPlaceholder from "./ImageWithPlaceholder";
 import { useReveal } from "@/hooks/useReveal";
 
 export default function Venue() {
-  const { venue } = useSiteConfig();
+  const { venue, photos } = useSiteConfig();
   const ref = useReveal();
 
   return (
@@ -18,7 +18,7 @@ export default function Venue() {
         <div className="grid md:grid-cols-2 gap-10 items-center">
           <div className="relative aspect-[16/10] rounded-lg overflow-hidden shadow-xl border border-gold/10">
             <ImageWithPlaceholder
-              src={images.venue}
+              src={photos.venue || images.venue}
               alt="Wedding venue"
               fill
               className="object-cover"

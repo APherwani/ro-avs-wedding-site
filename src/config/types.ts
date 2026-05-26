@@ -33,11 +33,18 @@ export interface VenueConfig {
   description: string;
 }
 
+export interface SitePhotosConfig {
+  hero: string;
+  ourStory: string;
+  venue: string;
+}
+
 export interface SiteConfig {
   couple: CoupleConfig;
   weddingDate: WeddingDateConfig;
   ourStory: OurStoryConfig;
   events: EventConfig[];
   venue: VenueConfig;
+  photos: SitePhotosConfig;
   gallery: string[];
 }

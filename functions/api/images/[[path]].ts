@@ -8,7 +8,7 @@ interface Env {
   IMAGES: R2Bucket;
 }
 
-const VALID_FOLDERS = ["gallery", "events"];
+const VALID_FOLDERS = ["gallery", "events", "site"];
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { path } = context.params;
