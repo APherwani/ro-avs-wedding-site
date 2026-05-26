@@ -1,22 +1,48 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useEffect, useMemo, useState, FormEvent } from "react";
 import { MandalaCorner } from "./Decorative";
 import { useReveal } from "@/hooks/useReveal";
+import { useSiteConfig } from "@/config/SiteConfigContext";
 
 export default function RSVP() {
   const ref = useReveal();
+  const { events: configuredEvents } = useSiteConfig();
+  const eventOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return configuredEvents
+      .map((event) => event.name.trim())
+      .filter((name) => {
+        if (!name || seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      });
+  }, [configuredEvents]);
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [eventSelectionTouched, setEventSelectionTouched] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
     numGuests: "",
-    events: ["Mehendi", "Sangeet", "Wedding", "Reception"] as string[],
+    events: [] as string[],
     dietary: "",
     message: "",
   });
+
+  useEffect(() => {
+    setFormData((prev) => {
+      if (!eventSelectionTouched) {
+        return { ...prev, events: eventOptions };
+      }
+
+      return {
+        ...prev,
+        events: prev.events.filter((event) => eventOptions.includes(event)),
+      };
+    });
+  }, [eventOptions, eventSelectionTouched]);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -27,6 +53,7 @@ export default function RSVP() {
   };
 
   const handleEventToggle = (event: string) => {
+    setEventSelectionTouched(true);
     setFormData((prev) => ({
       ...prev,
       events: prev.events.includes(event)
@@ -38,6 +65,12 @@ export default function RSVP() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (formData.events.length === 0) {
+      setError("Please select at least one event.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -148,6 +181,7 @@ export default function RSVP() {
                   name="fullName"
                   value={formData.fullName}
                   onChange={handleChange}
+                  maxLength={200}
                   required
                   className="w-full bg-white/10 border border-gold/30 rounded-lg px-4 py-3 text-white font-body text-lg placeholder-cream-dark/50 focus:outline-none focus:border-gold transition-colors"
                   placeholder="Your name"
@@ -162,6 +196,7 @@ export default function RSVP() {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
+                  maxLength={254}
                   required
                   className="w-full bg-white/10 border border-gold/30 rounded-lg px-4 py-3 text-white font-body text-lg placeholder-cream-dark/50 focus:outline-none focus:border-gold transition-colors"
                   placeholder="your@email.com"
@@ -205,9 +240,9 @@ export default function RSVP() {
               <label className="block font-body text-lg text-cream-dark mb-2">
                 Which events will you attend? *
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                {["Mehendi", "Sangeet", "Wedding", "Reception"].map(
-                  (event) => (
+              {eventOptions.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {eventOptions.map((event) => (
                     <label
                       key={event}
                       className="flex items-center gap-3 bg-white/5 border border-gold/20 rounded-lg px-4 py-3 cursor-pointer hover:bg-white/10 transition-colors"
@@ -222,9 +257,13 @@ export default function RSVP() {
                         {event}
                       </span>
                     </label>
-                  )
-                )}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="font-body text-lg text-cream-dark/70">
+                  RSVP events are not available yet.
+                </p>
+              )}
             </div>
 
             <div>
@@ -235,6 +274,7 @@ export default function RSVP() {
                 name="dietary"
                 value={formData.dietary}
                 onChange={handleChange}
+                maxLength={1000}
                 rows={3}
                 className="w-full bg-white/10 border border-gold/30 rounded-lg px-4 py-3 text-white font-body text-lg placeholder-cream-dark/50 focus:outline-none focus:border-gold transition-colors resize-none"
                 placeholder="Any allergies or dietary preferences..."
@@ -249,6 +289,7 @@ export default function RSVP() {
                 name="message"
                 value={formData.message}
                 onChange={handleChange}
+                maxLength={2000}
                 rows={3}
                 className="w-full bg-white/10 border border-gold/30 rounded-lg px-4 py-3 text-white font-body text-lg placeholder-cream-dark/50 focus:outline-none focus:border-gold transition-colors resize-none"
                 placeholder="Your wishes..."
@@ -263,7 +304,7 @@ export default function RSVP() {
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || eventOptions.length === 0}
               className="w-full bg-gold text-maroon-dark font-display text-xl font-bold py-4 rounded-lg hover:bg-gold-light transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? "Sending..." : "Send RSVP"}

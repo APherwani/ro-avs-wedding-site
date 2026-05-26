@@ -35,7 +35,7 @@ function errorRedirect(origin: string, code: string): Response {
   return new Response(null, {
     status: 302,
     headers: {
-      Location: `${origin}/admin#error=${code}`,
+      Location: `${origin}/admin#error=${encodeURIComponent(code)}`,
       "Set-Cookie": "oauth_state=; HttpOnly; Max-Age=0; Path=/api/admin/auth",
     },
   });
@@ -133,7 +133,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   return new Response(null, {
     status: 302,
     headers: {
-      Location: `${origin}/admin#token=${token}`,
+      Location: `${origin}/admin#token=${encodeURIComponent(token)}`,
       "Set-Cookie": "oauth_state=; HttpOnly; Max-Age=0; Path=/api/admin/auth",
     },
   });

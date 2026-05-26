@@ -79,3 +79,28 @@ npm run build
 Deploy with Cloudflare Pages so the `/functions` API routes, D1 database, and
 R2 image bucket are available. A plain static host can render the site, but
 RSVPs, admin login, config editing, and image uploads will not work there.
+
+## RSVP Durability
+
+Every RSVP is written to D1 and also backed up as a private JSON object in R2
+under `rsvp-backups/submissions/`. The public image proxy only serves the
+`gallery`, `events`, and `site` folders, so RSVP backups are not public assets.
+
+If D1 is unavailable during a guest submission, the site accepts the RSVP only
+when the R2 backup succeeds. If the admin RSVP list cannot read D1, it falls
+back to those private R2 backup records so the guest list remains recoverable.
+
+Organizer notification emails use Resend. Configure these Cloudflare
+environment variables/secrets:
+
+```bash
+RESEND_API_KEY=...
+RSVP_NOTIFY_FROM="Ro & Avs Wedding <rsvp@yourdomain.com>"
+RSVP_NOTIFY_TO="planner@example.com,couple@example.com"
+RSVP_NOTIFY_SUBJECT_PREFIX="Wedding RSVP" # optional
+RSVP_NOTIFY_REPLY_TO="planner@example.com" # optional; defaults to guest email
+```
+
+`RSVP_NOTIFY_TO` defaults to `ALLOWED_ADMIN_EMAILS` when set. Email failures are
+logged but do not block a guest after the RSVP has been saved to D1 or backed up
+to R2.

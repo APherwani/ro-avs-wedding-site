@@ -21,7 +21,7 @@ export default function Footer() {
         </p>
         <div className="w-24 h-[1px] bg-gradient-to-r from-transparent via-gold/40 to-transparent mx-auto my-8" />
         <p className="font-body text-sm text-cream-dark/50">
-          Made with love
+          Made by Arjun Pherwani
         </p>
       </div>
     </footer>

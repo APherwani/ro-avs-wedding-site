@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { SiteConfig, EventConfig } from "@/config/types";
 import { defaultConfig } from "@/config/content";
 import { images } from "@/config/images";
 
 interface RsvpEntry {
-  id: number;
+  id: number | string;
   fullName: string;
   email: string;
   numGuests: string;
@@ -14,6 +14,8 @@ interface RsvpEntry {
   dietary: string;
   message: string;
   createdAt: string;
+  source?: "database" | "backup";
+  backupOnly?: boolean;
 }
 
 function getToken(): string | null {
@@ -26,6 +28,31 @@ function setToken(token: string) {
 
 function clearToken() {
   sessionStorage.removeItem("admin_token");
+}
+
+function decodeHashValue(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function getOAuthHashValue(name: "token" | "error"): string | null {
+  const prefix = `#${name}=`;
+  const hash = window.location.hash;
+  if (!hash.startsWith(prefix)) return null;
+
+  const [value] = hash.slice(prefix.length).split("&");
+  return decodeHashValue(value);
+}
+
+function clearOAuthHash() {
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}${window.location.search}`
+  );
 }
 
 // --- OAuth error messages ---
@@ -50,11 +77,11 @@ function LoginForm() {
 
   useEffect(() => {
     let timeoutId: number | undefined;
-    const hash = window.location.hash;
-    if (hash.startsWith("#error=")) {
-      const message = getOAuthErrorMessage(hash.slice(7));
+    const errorCode = getOAuthHashValue("error");
+    if (errorCode !== null) {
+      const message = getOAuthErrorMessage(errorCode);
       timeoutId = window.setTimeout(() => setError(message), 0);
-      history.replaceState(null, "", window.location.pathname);
+      clearOAuthHash();
     }
     return () => {
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
@@ -102,6 +129,9 @@ function StatsCards({
       eventCounts[e] = (eventCounts[e] || 0) + 1;
     }
   }
+  const eventNames = Object.keys(eventCounts).sort((a, b) =>
+    a.localeCompare(b)
+  );
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -121,7 +151,7 @@ function StatsCards({
           {totalGuests}
         </p>
       </div>
-      {["Mehendi", "Sangeet", "Wedding", "Reception"].map((event) => (
+      {eventNames.map((event) => (
         <div
           key={event}
           className="bg-white rounded-xl p-5 border border-gold/20 shadow-sm"
@@ -150,6 +180,9 @@ function RsvpTable({
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const eventOptions = Array.from(
+    new Set(rsvps.flatMap((rsvp) => rsvp.events))
+  ).sort((a, b) => a.localeCompare(b));
 
   const filtered = rsvps.filter((r) => {
     const matchesSearch =
@@ -179,10 +212,11 @@ function RsvpTable({
           className="border border-gold/30 rounded-lg px-4 py-2 font-body text-charcoal bg-white focus:outline-none focus:border-gold transition-colors"
         >
           <option value="">All Events</option>
-          <option value="Mehendi">Mehendi</option>
-          <option value="Sangeet">Sangeet</option>
-          <option value="Wedding">Wedding</option>
-          <option value="Reception">Reception</option>
+          {eventOptions.map((event) => (
+            <option key={event} value={event}>
+              {event}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -236,7 +270,14 @@ function RsvpTable({
                   className="border-b border-gold/10 hover:bg-cream/50 transition-colors"
                 >
                   <td className="px-4 py-3 font-body text-charcoal">
-                    {r.fullName}
+                    <div className="flex flex-col gap-1">
+                      <span>{r.fullName}</span>
+                      {r.backupOnly && (
+                        <span className="w-fit rounded-full bg-gold/20 px-2 py-0.5 text-xs text-maroon">
+                          Backup only
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 font-body text-charcoal text-sm">
                     {r.email}
@@ -266,11 +307,15 @@ function RsvpTable({
                     {new Date(r.createdAt).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3">
-                    {confirmDelete === r.id ? (
+                    {typeof r.id !== "number" ? (
+                      <span className="text-xs text-charcoal/40 font-body">
+                        Backup copy
+                      </span>
+                    ) : confirmDelete === r.id ? (
                       <div className="flex gap-1">
                         <button
                           onClick={() => {
-                            onDelete(r.id);
+                            onDelete(r.id as number);
                             setConfirmDelete(null);
                           }}
                           className="text-xs bg-deep-red text-white px-2 py-1 rounded font-body hover:bg-deep-red/80 transition-colors"
@@ -286,7 +331,7 @@ function RsvpTable({
                       </div>
                     ) : (
                       <button
-                        onClick={() => setConfirmDelete(r.id)}
+                        onClick={() => setConfirmDelete(r.id as number)}
                         className="text-xs text-deep-red/70 hover:text-deep-red font-body transition-colors"
                       >
                         Delete
@@ -351,28 +396,442 @@ const labelClass =
   "block font-body text-sm text-charcoal/70 mb-1 font-semibold";
 type SitePhotoKey = keyof SiteConfig["photos"];
 
+type ImageFolder = "gallery" | "events" | "site";
+
+interface CropSettings {
+  aspectWidth: number;
+  aspectHeight: number;
+  outputWidth: number;
+  outputHeight: number;
+  label: string;
+}
+
+interface CropSize {
+  width: number;
+  height: number;
+}
+
+interface CropOffset {
+  x: number;
+  y: number;
+}
+
+type CropTarget =
+  | { type: "site"; field: SitePhotoKey }
+  | { type: "event"; index: number }
+  | {
+      type: "gallery";
+      remainingFiles: File[];
+      totalFiles: number;
+      position: number;
+      slotIndex: number;
+      uploadedCount: number;
+      failedCount: number;
+    };
+
+interface CropSession extends CropSettings {
+  id: number;
+  file: File;
+  previewUrl: string;
+  folder: ImageFolder;
+  target: CropTarget;
+  title: string;
+}
+
+const heroCrop: CropSettings = {
+  aspectWidth: 16,
+  aspectHeight: 9,
+  outputWidth: 2400,
+  outputHeight: 1350,
+  label: "16:9 hero crop",
+};
+
+const storyCrop: CropSettings = {
+  aspectWidth: 4,
+  aspectHeight: 5,
+  outputWidth: 1600,
+  outputHeight: 2000,
+  label: "4:5 story crop",
+};
+
+const landscapeCrop: CropSettings = {
+  aspectWidth: 16,
+  aspectHeight: 10,
+  outputWidth: 2000,
+  outputHeight: 1250,
+  label: "16:10 website crop",
+};
+
+const galleryCoverCrop: CropSettings = {
+  aspectWidth: 3,
+  aspectHeight: 4,
+  outputWidth: 1500,
+  outputHeight: 2000,
+  label: "3:4 gallery cover crop",
+};
+
+const gallerySquareCrop: CropSettings = {
+  aspectWidth: 1,
+  aspectHeight: 1,
+  outputWidth: 1600,
+  outputHeight: 1600,
+  label: "1:1 gallery crop",
+};
+
 const sitePhotoMeta: Record<
   SitePhotoKey,
-  { label: string; placeholder: string; defaultSrc: string }
+  { label: string; placeholder: string; defaultSrc: string; crop: CropSettings }
 > = {
   hero: {
     label: "Hero Photo",
     placeholder: "/images/hero.jpg or /api/images/site/...",
     defaultSrc: images.hero,
+    crop: heroCrop,
   },
   ourStory: {
     label: "Our Story Photo",
     placeholder: "/images/couple-story.jpg or /api/images/site/...",
     defaultSrc: images.coupleStory,
+    crop: storyCrop,
   },
   venue: {
     label: "Venue Photo",
     placeholder: "/images/venue.jpg or /api/images/site/...",
     defaultSrc: images.venue,
+    crop: landscapeCrop,
   },
 };
 
 const sitePhotoFields = Object.keys(sitePhotoMeta) as SitePhotoKey[];
+
+function getGalleryCrop(slotIndex: number): CropSettings {
+  return slotIndex === 0 ? galleryCoverCrop : gallerySquareCrop;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getCroppedFileName(file: File): string {
+  const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
+  return `${baseName}-cropped.jpg`;
+}
+
+function canvasToJpegFile(
+  canvas: HTMLCanvasElement,
+  fileName: string
+): Promise<File> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Could not create cropped image"));
+          return;
+        }
+        resolve(new File([blob], fileName, { type: "image/jpeg" }));
+      },
+      "image/jpeg",
+      0.92
+    );
+  });
+}
+
+async function createCroppedImageFile(
+  session: CropSession,
+  image: HTMLImageElement,
+  frameSize: CropSize,
+  offset: CropOffset,
+  zoom: number
+): Promise<File> {
+  const naturalWidth = image.naturalWidth;
+  const naturalHeight = image.naturalHeight;
+  const baseScale = Math.max(
+    frameSize.width / naturalWidth,
+    frameSize.height / naturalHeight
+  );
+  const effectiveScale = baseScale * zoom;
+  const displayWidth = naturalWidth * effectiveScale;
+  const displayHeight = naturalHeight * effectiveScale;
+  const left = (frameSize.width - displayWidth) / 2 + offset.x;
+  const top = (frameSize.height - displayHeight) / 2 + offset.y;
+  const sourceWidth = Math.min(naturalWidth, frameSize.width / effectiveScale);
+  const sourceHeight = Math.min(
+    naturalHeight,
+    frameSize.height / effectiveScale
+  );
+  const sourceX = clamp(
+    -left / effectiveScale,
+    0,
+    naturalWidth - sourceWidth
+  );
+  const sourceY = clamp(
+    -top / effectiveScale,
+    0,
+    naturalHeight - sourceHeight
+  );
+
+  const canvas = document.createElement("canvas");
+  canvas.width = session.outputWidth;
+  canvas.height = session.outputHeight;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not prepare cropped image");
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  return canvasToJpegFile(canvas, getCroppedFileName(session.file));
+}
+
+function ImageCropModal({
+  session,
+  onCancel,
+  onApply,
+}: {
+  session: CropSession;
+  onCancel: () => void;
+  onApply: (file: File) => void;
+}) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const [frameSize, setFrameSize] = useState<CropSize>({ width: 0, height: 0 });
+  const [imageSize, setImageSize] = useState<CropSize | null>(null);
+  const [offset, setOffset] = useState<CropOffset>({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [dragStart, setDragStart] = useState<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
+  const [creatingCrop, setCreatingCrop] = useState(false);
+  const [cropError, setCropError] = useState("");
+
+  const aspectRatio = session.aspectWidth / session.aspectHeight;
+  const imageReady = Boolean(
+    imageSize && frameSize.width > 0 && frameSize.height > 0
+  );
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+
+    const updateFrameSize = () => {
+      setFrameSize({
+        width: frame.clientWidth,
+        height: frame.clientHeight,
+      });
+    };
+
+    updateFrameSize();
+    const observer = new ResizeObserver(updateFrameSize);
+    observer.observe(frame);
+
+    return () => observer.disconnect();
+  }, [session.id]);
+
+  const clampOffset = useCallback(
+    (nextOffset: CropOffset, nextZoom = zoom): CropOffset => {
+      if (!imageSize || frameSize.width === 0 || frameSize.height === 0) {
+        return { x: 0, y: 0 };
+      }
+
+      const baseScale = Math.max(
+        frameSize.width / imageSize.width,
+        frameSize.height / imageSize.height
+      );
+      const displayWidth = imageSize.width * baseScale * nextZoom;
+      const displayHeight = imageSize.height * baseScale * nextZoom;
+      const maxX = Math.max(0, (displayWidth - frameSize.width) / 2);
+      const maxY = Math.max(0, (displayHeight - frameSize.height) / 2);
+
+      return {
+        x: clamp(nextOffset.x, -maxX, maxX),
+        y: clamp(nextOffset.y, -maxY, maxY),
+      };
+    },
+    [frameSize.height, frameSize.width, imageSize, zoom]
+  );
+
+  const handleZoomChange = (value: string) => {
+    const nextZoom = Number(value);
+    setZoom(nextZoom);
+    setOffset((current) => clampOffset(current, nextZoom));
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!imageReady) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragStart({
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: offset.x,
+      originY: offset.y,
+    });
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStart || dragStart.pointerId !== e.pointerId) return;
+    setOffset(
+      clampOffset({
+        x: dragStart.originX + e.clientX - dragStart.startX,
+        y: dragStart.originY + e.clientY - dragStart.startY,
+      })
+    );
+  };
+
+  const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragStart?.pointerId === e.pointerId) {
+      setDragStart(null);
+    }
+  };
+
+  const handleApply = async () => {
+    const image = imageRef.current;
+    if (!image || !imageReady) return;
+
+    setCreatingCrop(true);
+    setCropError("");
+
+    try {
+      const croppedFile = await createCroppedImageFile(
+        session,
+        image,
+        frameSize,
+        offset,
+        zoom
+      );
+      onApply(croppedFile);
+    } catch {
+      setCropError("Could not crop this image. Try another photo.");
+      setCreatingCrop(false);
+    }
+  };
+
+  const baseScale =
+    imageSize && frameSize.width > 0 && frameSize.height > 0
+      ? Math.max(
+          frameSize.width / imageSize.width,
+          frameSize.height / imageSize.height
+        )
+      : 1;
+  const imageStyle =
+    imageSize && frameSize.width > 0 && frameSize.height > 0
+      ? {
+          width: `${imageSize.width * baseScale}px`,
+          height: `${imageSize.height * baseScale}px`,
+          transform: `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+        }
+      : { opacity: 0 };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/70 px-4 py-6">
+      <div className="w-full max-w-3xl max-h-[calc(100vh-3rem)] overflow-y-auto rounded-xl bg-white border border-gold/30 shadow-2xl p-5">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+          <div>
+            <h3 className="font-display text-xl text-maroon">
+              {session.title}
+            </h3>
+            <p className="font-body text-xs text-charcoal/50 mt-1">
+              {session.label}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="self-start font-body text-sm text-charcoal/60 hover:text-charcoal"
+          >
+            Cancel
+          </button>
+        </div>
+
+        <div
+          ref={frameRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
+          className={`relative mx-auto overflow-hidden rounded-lg border border-gold/30 bg-charcoal ${
+            aspectRatio < 1 ? "max-w-sm" : "max-w-2xl"
+          } ${dragStart ? "cursor-grabbing" : "cursor-grab"}`}
+          style={{
+            aspectRatio: `${session.aspectWidth} / ${session.aspectHeight}`,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            ref={imageRef}
+            src={session.previewUrl}
+            alt={session.title}
+            draggable={false}
+            onLoad={(e) =>
+              setImageSize({
+                width: e.currentTarget.naturalWidth,
+                height: e.currentTarget.naturalHeight,
+              })
+            }
+            className="absolute left-1/2 top-1/2 max-w-none select-none touch-none"
+            style={imageStyle}
+          />
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <label className={labelClass}>Zoom</label>
+          <input
+            type="range"
+            min="1"
+            max="3"
+            step="0.01"
+            value={zoom}
+            onChange={(e) => handleZoomChange(e.target.value)}
+            className="w-full"
+          />
+        </div>
+
+        {cropError && (
+          <p className="font-body text-sm text-deep-red mt-3">{cropError}</p>
+        )}
+
+        <div className="flex flex-wrap justify-end gap-2 mt-5">
+          <button
+            type="button"
+            onClick={() => {
+              setZoom(1);
+              setOffset({ x: 0, y: 0 });
+            }}
+            className="font-body text-sm px-4 py-2 rounded-lg border border-charcoal/20 text-charcoal hover:bg-charcoal/5 transition-colors"
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={!imageReady || creatingCrop}
+            className="font-body text-sm px-5 py-2 rounded-lg bg-maroon text-gold font-semibold hover:bg-maroon-dark transition-colors disabled:opacity-50"
+          >
+            {creatingCrop ? "Preparing..." : "Use Crop"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // --- Drag gripper icon ---
 
@@ -474,7 +933,7 @@ async function compressImage(file: File): Promise<File> {
 
 async function uploadImage(
   file: File,
-  folder: "gallery" | "events" | "site"
+  folder: ImageFolder
 ): Promise<{ success: boolean; url?: string; error?: string }> {
   console.log(`[uploadImage] Starting upload — file: ${file.name}, size: ${file.size}, type: ${file.type}, folder: ${folder}`);
 
@@ -508,6 +967,13 @@ async function uploadImage(
     console.log(`[uploadImage] Response: ${res.status} ${res.statusText}`);
 
     if (!res.ok) {
+      if (res.status === 404) {
+        return {
+          success: false,
+          error: "Image uploads require the Cloudflare preview or deployed site.",
+        };
+      }
+
       let errorDetail: string;
       try {
         const data = await res.json();
@@ -563,6 +1029,8 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [cropSession, setCropSession] = useState<CropSession | null>(null);
+  const cropSessionIdRef = useRef(0);
 
   // Event drag state
   const [eventDragIdx, setEventDragIdx] = useState<number | null>(null);
@@ -577,6 +1045,12 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
   const [galleryDragIdx, setGalleryDragIdx] = useState<number | null>(null);
   const [galleryDropIdx, setGalleryDropIdx] = useState<number | null>(null);
   const [galleryUploading, setGalleryUploading] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (cropSession) URL.revokeObjectURL(cropSession.previewUrl);
+    };
+  }, [cropSession]);
 
   // Load current config
   useEffect(() => {
@@ -612,6 +1086,22 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
   }, []);
 
   const handleSave = async () => {
+    if (cropSession) {
+      setMessage({
+        type: "error",
+        text: "Finish or cancel photo cropping before saving.",
+      });
+      return;
+    }
+
+    if (eventUploadingIdx !== null || sitePhotoUploading !== null || galleryUploading) {
+      setMessage({
+        type: "error",
+        text: "Wait for the photo upload to finish before saving.",
+      });
+      return;
+    }
+
     const token = getToken();
     if (!token) {
       onLogout();
@@ -633,6 +1123,16 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
 
       if (res.status === 401) {
         onLogout();
+        return;
+      }
+
+      if (!res.ok) {
+        let errorText = `Failed to save config (HTTP ${res.status})`;
+        if (res.headers.get("content-type")?.includes("application/json")) {
+          const data = await res.json();
+          errorText = data.error || errorText;
+        }
+        setMessage({ type: "error", text: errorText });
         return;
       }
 
@@ -744,6 +1244,54 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
     }));
   };
 
+  const openCropSession = useCallback(
+    (
+      file: File,
+      options: Omit<CropSession, "id" | "file" | "previewUrl">
+    ) => {
+      cropSessionIdRef.current += 1;
+      setCropSession({
+        id: cropSessionIdRef.current,
+        file,
+        previewUrl: URL.createObjectURL(file),
+        ...options,
+      });
+    },
+    []
+  );
+
+  const openGalleryCrop = useCallback(
+    (
+      file: File,
+      remainingFiles: File[],
+      position: number,
+      totalFiles: number,
+      slotIndex: number,
+      uploadedCount: number,
+      failedCount: number
+    ) => {
+      const crop = getGalleryCrop(slotIndex);
+      openCropSession(file, {
+        ...crop,
+        folder: "gallery",
+        target: {
+          type: "gallery",
+          remainingFiles,
+          totalFiles,
+          position,
+          slotIndex,
+          uploadedCount,
+          failedCount,
+        },
+        title:
+          totalFiles > 1
+            ? `Crop Gallery Photo ${position} of ${totalFiles}`
+            : "Crop Gallery Photo",
+      });
+    },
+    [openCropSession]
+  );
+
   // --- Site photo upload ---
 
   const handleSitePhotoUpload = async (
@@ -755,20 +1303,13 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
     if (!file) return;
     e.target.value = "";
 
-    setSitePhotoUploading(field);
     setMessage(null);
-    const result = await uploadImage(file, "site");
-    console.log("[handleSitePhotoUpload] Upload result:", result);
-    if (result.success && result.url) {
-      updatePhoto(field, result.url);
-      setMessage({
-        type: "success",
-        text: "Photo uploaded. Save changes to publish it.",
-      });
-    } else {
-      setMessage({ type: "error", text: result.error || "Upload failed" });
-    }
-    setSitePhotoUploading(null);
+    openCropSession(file, {
+      ...sitePhotoMeta[field].crop,
+      folder: "site",
+      target: { type: "site", field },
+      title: `Crop ${sitePhotoMeta[field].label}`,
+    });
   };
 
   const handleClearSitePhoto = (field: SitePhotoKey) => {
@@ -790,20 +1331,13 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
     if (!file) return;
     e.target.value = ""; // clear after capturing file reference
 
-    setEventUploadingIdx(index);
     setMessage(null);
-    const result = await uploadImage(file, "events");
-    console.log(`[handleEventImageUpload] Upload result:`, result);
-    if (result.success && result.url) {
-      updateEvent(index, "image", result.url);
-      setMessage({
-        type: "success",
-        text: "Event photo uploaded. Save changes to publish it.",
-      });
-    } else {
-      setMessage({ type: "error", text: result.error || "Upload failed" });
-    }
-    setEventUploadingIdx(null);
+    openCropSession(file, {
+      ...landscapeCrop,
+      folder: "events",
+      target: { type: "event", index },
+      title: `Crop ${config.events[index]?.name || `Event ${index + 1}`} Photo`,
+    });
   };
 
   const handleRemoveEventImage = (index: number) => {
@@ -824,29 +1358,121 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
     if (!files || files.length === 0) return;
     const fileArray = Array.from(files); // snapshot before clearing
     e.target.value = "";
-    setGalleryUploading(true);
+    setMessage(null);
 
-    const newUrls: string[] = [];
-    for (const file of fileArray) {
-      console.log(`[handleGalleryUpload] Uploading: ${file.name} (${file.size} bytes, ${file.type})`);
-      const result = await uploadImage(file, "gallery");
-      console.log(`[handleGalleryUpload] Result for ${file.name}:`, result);
+    const [firstFile, ...remainingFiles] = fileArray;
+    openGalleryCrop(
+      firstFile,
+      remainingFiles,
+      1,
+      fileArray.length,
+      config.gallery.length,
+      0,
+      0
+    );
+  };
+
+  const handleCroppedPhoto = async (croppedFile: File) => {
+    const session = cropSession;
+    if (!session) return;
+
+    setCropSession(null);
+    setMessage(null);
+
+    if (session.target.type === "site") {
+      const { field } = session.target;
+      setSitePhotoUploading(field);
+      const result = await uploadImage(croppedFile, session.folder);
+      console.log("[handleCroppedPhoto] Site upload result:", result);
       if (result.success && result.url) {
-        newUrls.push(result.url);
+        updatePhoto(field, result.url);
+        setMessage({
+          type: "success",
+          text: "Photo uploaded. Save changes to publish it.",
+        });
       } else {
-        console.warn(`[handleGalleryUpload] Failed for ${file.name}:`, result.error);
-        setMessage({ type: "error", text: result.error || `Failed to upload ${file.name}` });
+        setMessage({ type: "error", text: result.error || "Upload failed" });
       }
+      setSitePhotoUploading(null);
+      return;
     }
 
-    console.log(`[handleGalleryUpload] Total uploaded: ${newUrls.length}/${fileArray.length}`);
-    if (newUrls.length > 0) {
+    if (session.target.type === "event") {
+      const { index } = session.target;
+      setEventUploadingIdx(index);
+      const result = await uploadImage(croppedFile, session.folder);
+      console.log("[handleCroppedPhoto] Event upload result:", result);
+      if (result.success && result.url) {
+        updateEvent(index, "image", result.url);
+        setMessage({
+          type: "success",
+          text: "Event photo uploaded. Save changes to publish it.",
+        });
+      } else {
+        setMessage({ type: "error", text: result.error || "Upload failed" });
+      }
+      setEventUploadingIdx(null);
+      return;
+    }
+
+    setGalleryUploading(true);
+    const result = await uploadImage(croppedFile, session.folder);
+    console.log("[handleCroppedPhoto] Gallery upload result:", result);
+
+    let nextUploadedCount = session.target.uploadedCount;
+    let nextFailedCount = session.target.failedCount;
+    let nextSlotIndex = session.target.slotIndex;
+
+    if (result.success && result.url) {
+      nextUploadedCount += 1;
+      nextSlotIndex += 1;
       setConfig((prev) => ({
         ...prev,
-        gallery: [...prev.gallery, ...newUrls],
+        gallery: [...prev.gallery, result.url as string],
       }));
+    } else {
+      nextFailedCount += 1;
     }
+
     setGalleryUploading(false);
+
+    const [nextFile, ...remainingFiles] = session.target.remainingFiles;
+    if (nextFile) {
+      openGalleryCrop(
+        nextFile,
+        remainingFiles,
+        session.target.position + 1,
+        session.target.totalFiles,
+        nextSlotIndex,
+        nextUploadedCount,
+        nextFailedCount
+      );
+      return;
+    }
+
+    if (nextFailedCount > 0) {
+      setMessage({
+        type: "error",
+        text:
+          nextUploadedCount > 0
+            ? `${nextUploadedCount} gallery photo${
+                nextUploadedCount === 1 ? "" : "s"
+              } uploaded, ${nextFailedCount} failed. Save changes to publish uploaded photos.`
+            : result.error || "Gallery upload failed",
+      });
+      return;
+    }
+
+    if (nextUploadedCount > 0) {
+      setMessage({
+        type: "success",
+        text: `${nextUploadedCount} gallery photo${
+          nextUploadedCount === 1 ? "" : "s"
+        } uploaded. Save changes to publish ${
+          nextUploadedCount === 1 ? "it" : "them"
+        }.`,
+      });
+    }
   };
 
   const removeGalleryImage = async (index: number) => {
@@ -877,8 +1503,21 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
     );
   }
 
+  const uploadInProgress =
+    eventUploadingIdx !== null || sitePhotoUploading !== null || galleryUploading;
+  const photoWorkInProgress = uploadInProgress || cropSession !== null;
+
   return (
     <div className="space-y-8">
+      {cropSession && (
+        <ImageCropModal
+          key={cropSession.id}
+          session={cropSession}
+          onCancel={() => setCropSession(null)}
+          onApply={handleCroppedPhoto}
+        />
+      )}
+
       {/* Save bar */}
       <div className="flex items-center justify-between bg-white rounded-xl p-4 border border-gold/20 shadow-sm sticky top-0 z-10">
         <div>
@@ -903,10 +1542,16 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
           </button>
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || photoWorkInProgress}
             className="font-body text-sm px-6 py-2 rounded-lg bg-maroon text-gold font-semibold hover:bg-maroon-dark transition-colors disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save Changes"}
+            {cropSession
+              ? "Cropping..."
+              : uploadInProgress
+                ? "Uploading..."
+                : saving
+                  ? "Saving..."
+                  : "Save Changes"}
           </button>
         </div>
       </div>
@@ -1002,7 +1647,12 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
                 className="border border-gold/15 rounded-lg p-4 bg-cream/30"
               >
                 <label className={labelClass}>{meta.label}</label>
-                <div className="aspect-[16/10] rounded-lg overflow-hidden border border-gold/20 bg-cream-dark mb-3">
+                <div
+                  className="rounded-lg overflow-hidden border border-gold/20 bg-cream-dark mb-3"
+                  style={{
+                    aspectRatio: `${meta.crop.aspectWidth} / ${meta.crop.aspectHeight}`,
+                  }}
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={previewSrc}
@@ -1246,8 +1896,8 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
                 {/* Event Image */}
                 <div className="md:col-span-2">
                   <label className={labelClass}>Event Image</label>
-                  <div className="grid sm:grid-cols-[6rem_1fr] gap-3 items-start">
-                    <div className="w-24 h-16 rounded border border-gold/20 overflow-hidden bg-cream-dark flex items-center justify-center">
+                  <div className="grid sm:grid-cols-[10rem_1fr] gap-3 items-start">
+                    <div className="w-full aspect-[16/10] rounded border border-gold/20 overflow-hidden bg-cream-dark flex items-center justify-center">
                       {event.image ? (
                         <>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1337,7 +1987,7 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
             <p className="font-body text-xs text-charcoal/40 mb-3">
               Drag to reorder. Hover to delete.
             </p>
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {config.gallery.map((url, i) => (
                 <div
                   key={url}
@@ -1361,11 +2011,13 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
                     setGalleryDragIdx(null);
                     setGalleryDropIdx(null);
                   }}
-                  className={`relative aspect-square rounded-lg overflow-hidden group cursor-grab active:cursor-grabbing border-2 transition-all ${
+                  className={`relative rounded-lg overflow-hidden group cursor-grab active:cursor-grabbing border-2 transition-all ${
                     galleryDropIdx === i && galleryDragIdx !== i
                       ? "border-gold"
                       : "border-transparent"
-                  } ${galleryDragIdx === i ? "opacity-40" : ""}`}
+                  } ${i === 0 ? "row-span-2 aspect-[3/4]" : "aspect-square"} ${
+                    galleryDragIdx === i ? "opacity-40" : ""
+                  }`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -1513,19 +2165,17 @@ export default function AdminPage() {
 
   // Check for OAuth callback token or existing session on mount
   useEffect(() => {
-    const hash = window.location.hash;
-
     // OAuth callback — token passed in URL hash
-    if (hash.startsWith("#token=")) {
-      const token = hash.slice(7);
+    const token = getOAuthHashValue("token");
+    if (token !== null) {
       setToken(token);
       setAuthed(true);
-      history.replaceState(null, "", window.location.pathname);
+      clearOAuthHash();
       return;
     }
 
     // OAuth error — handled by LoginForm, just clear loading
-    if (hash.startsWith("#error=")) {
+    if (getOAuthHashValue("error") !== null) {
       setLoading(false);
       return;
     }
