@@ -65,7 +65,15 @@ type RsvpBackupRecord = {
   dbRowId?: number;
   dbError?: string;
   deletedAt?: string;
+  emailNotification?: EmailNotificationStatus;
   rsvp: RsvpInput;
+};
+
+type EmailNotificationStatus = {
+  attemptedAt: string;
+  status: "sent" | "failed" | "skipped";
+  resendId?: string;
+  error?: string;
 };
 
 function jsonError(status: number, error: string, details?: string[]) {
@@ -623,15 +631,21 @@ function formatRsvpHtml(record: RsvpBackupRecord) {
   `;
 }
 
-async function sendRsvpNotification(env: Env, record: RsvpBackupRecord) {
+async function sendRsvpNotification(
+  env: Env,
+  record: RsvpBackupRecord
+): Promise<EmailNotificationStatus> {
+  const attemptedAt = new Date().toISOString();
   const recipients = splitEmailList(env.RSVP_NOTIFY_TO || env.ALLOWED_ADMIN_EMAILS);
   const from = env.RSVP_NOTIFY_FROM;
 
   if (!env.RESEND_API_KEY || !from || recipients.length === 0) {
-    console.warn(
-      "RSVP email notification skipped. Set RESEND_API_KEY, RSVP_NOTIFY_FROM, and RSVP_NOTIFY_TO."
-    );
-    return;
+    return {
+      attemptedAt,
+      status: "skipped",
+      error:
+        "Set RESEND_API_KEY, RSVP_NOTIFY_FROM, and RSVP_NOTIFY_TO to send RSVP notifications.",
+    };
   }
 
   const subjectPrefix = env.RSVP_NOTIFY_SUBJECT_PREFIX || "Wedding RSVP";
@@ -640,6 +654,7 @@ async function sendRsvpNotification(env: Env, record: RsvpBackupRecord) {
     headers: {
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
       "Content-Type": "application/json",
+      "Idempotency-Key": `rsvp-${record.submissionId}`,
     },
     body: JSON.stringify({
       from,
@@ -650,16 +665,58 @@ async function sendRsvpNotification(env: Env, record: RsvpBackupRecord) {
       html: formatRsvpHtml(record),
     }),
   });
+  const responseText = await response.text();
+  let responseData: unknown;
+
+  try {
+    responseData = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    responseData = responseText;
+  }
 
   if (!response.ok) {
-    throw new Error(`Resend returned ${response.status}: ${await response.text()}`);
+    return {
+      attemptedAt,
+      status: "failed",
+      error: `Resend returned ${response.status}: ${
+        typeof responseData === "string"
+          ? responseData
+          : JSON.stringify(responseData)
+      }`,
+    };
   }
+
+  const resendId =
+    isRecord(responseData) && typeof responseData.id === "string"
+      ? responseData.id
+      : undefined;
+
+  return { attemptedAt, status: "sent", ...(resendId ? { resendId } : {}) };
 }
 
-function notifyOrganizers(context: EventContext<Env, string, unknown>, record: RsvpBackupRecord) {
+function notifyOrganizers(
+  context: EventContext<Env, string, unknown>,
+  backupKey: string,
+  record: RsvpBackupRecord
+) {
   context.waitUntil(
-    sendRsvpNotification(context.env, record).catch((err) => {
-      console.error("RSVP notification email failed:", err);
+    sendRsvpNotification(context.env, record).then(async (status) => {
+      if (status.status !== "sent") {
+        console.error("RSVP notification email did not send:", status.error);
+      }
+
+      const backupResult = await putRsvpBackup(context.env, backupKey, {
+        ...record,
+        emailNotification: status,
+      });
+      if (!backupResult.ok) {
+        console.error(
+          "Could not update RSVP backup email status:",
+          backupResult.error
+        );
+      }
+    }).catch((err) => {
+      console.error("RSVP notification email failed unexpectedly:", err);
     })
   );
 }
@@ -769,7 +826,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       );
     }
 
-    notifyOrganizers(context, finalBackupRecord);
+    notifyOrganizers(context, backupKey, finalBackupRecord);
 
     return Response.json(
       {

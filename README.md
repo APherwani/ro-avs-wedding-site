@@ -104,3 +104,18 @@ RSVP_NOTIFY_REPLY_TO="planner@example.com" # optional; defaults to guest email
 `RSVP_NOTIFY_TO` defaults to `ALLOWED_ADMIN_EMAILS` when set. Email failures are
 logged but do not block a guest after the RSVP has been saved to D1 or backed up
 to R2.
+
+After setting secrets, test Resend through the deployed Pages Function:
+
+```bash
+TOKEN=$(curl -sS https://YOUR_PAGES_DOMAIN/api/admin/auth \
+  -H 'content-type: application/json' \
+  --data '{"password":"YOUR_ADMIN_PASSWORD"}' \
+  | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).token))")
+
+curl -sS -X POST https://YOUR_PAGES_DOMAIN/api/admin/test-email \
+  -H "authorization: Bearer $TOKEN"
+```
+
+If Resend rejects the email, this endpoint returns the exact Resend status and
+error body without exposing the API key.
