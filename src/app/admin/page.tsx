@@ -459,14 +459,14 @@ async function uploadImage(
     return { success: false, error: "Not authenticated" };
   }
 
-  if (file.size > 10 * 1024 * 1024) {
-    console.warn("[uploadImage] File too large:", file.size);
-    return { success: false, error: "File too large (max 10MB)" };
-  }
-
   console.log("[uploadImage] Compressing...");
   const compressed = await compressImage(file);
   console.log(`[uploadImage] After compression: ${file.name} ${file.size} → ${compressed.name} ${compressed.size} bytes`);
+
+  if (compressed.size > 10 * 1024 * 1024) {
+    console.warn("[uploadImage] File still too large after compression:", compressed.size);
+    return { success: false, error: "File too large after compression (max 10MB)" };
+  }
 
   const formData = new FormData();
   formData.append("file", compressed);
@@ -542,6 +542,9 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
   // Event drag state
   const [eventDragIdx, setEventDragIdx] = useState<number | null>(null);
   const [eventDropIdx, setEventDropIdx] = useState<number | null>(null);
+  const [eventUploadingIdx, setEventUploadingIdx] = useState<number | null>(
+    null
+  );
 
   // Gallery drag state
   const [galleryDragIdx, setGalleryDragIdx] = useState<number | null>(null);
@@ -717,22 +720,28 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
     if (!file) return;
     e.target.value = ""; // clear after capturing file reference
 
+    setEventUploadingIdx(index);
+    setMessage(null);
     const result = await uploadImage(file, "events");
     console.log(`[handleEventImageUpload] Upload result:`, result);
     if (result.success && result.url) {
       updateEvent(index, "image", result.url);
+      setMessage({
+        type: "success",
+        text: "Event photo uploaded. Save changes to publish it.",
+      });
     } else {
       setMessage({ type: "error", text: result.error || "Upload failed" });
     }
+    setEventUploadingIdx(null);
   };
 
-  const handleRemoveEventImage = async (index: number) => {
-    const url = config.events[index]?.image;
-    console.log(`[handleRemoveEventImage] Event ${index} — image url:`, url || "(none)");
-    if (url) {
-      await deleteImage(url);
-    }
+  const handleRemoveEventImage = (index: number) => {
     updateEvent(index, "image", "");
+    setMessage({
+      type: "success",
+      text: "Event photo cleared. Save changes to publish it.",
+    });
   };
 
   // --- Gallery handlers ---
@@ -1099,45 +1108,65 @@ function ConfigEditor({ onLogout }: { onLogout: () => void }) {
                 {/* Event Image */}
                 <div className="md:col-span-2">
                   <label className={labelClass}>Event Image</label>
-                  {event.image ? (
-                    <div className="flex items-center gap-3">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={event.image}
-                        alt={event.name}
-                        className="w-24 h-16 object-cover rounded border border-gold/20"
-                      />
-                      <div className="flex gap-2">
-                        <label className="text-xs text-gold hover:text-gold-dark font-body cursor-pointer">
-                          Change
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => handleEventImageUpload(i, e)}
+                  <div className="grid sm:grid-cols-[6rem_1fr] gap-3 items-start">
+                    <div className="w-24 h-16 rounded border border-gold/20 overflow-hidden bg-cream-dark flex items-center justify-center">
+                      {event.image ? (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={event.image}
+                            alt={event.name}
+                            className="w-full h-full object-cover"
                           />
-                        </label>
-                        <button
-                          onClick={() => handleRemoveEventImage(i)}
-                          className="text-xs text-deep-red/70 hover:text-deep-red font-body"
+                        </>
+                      ) : (
+                        <span className="font-body text-xs text-charcoal/40">
+                          No photo
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <input
+                        className={inputClass}
+                        value={event.image || ""}
+                        onChange={(e) => updateEvent(i, "image", e.target.value)}
+                        placeholder="/images/mehendi.jpg or /api/images/events/..."
+                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label
+                          className={`text-xs font-body cursor-pointer transition-colors ${
+                            eventUploadingIdx === i
+                              ? "text-charcoal/40 cursor-wait"
+                              : "text-gold hover:text-gold-dark"
+                          }`}
                         >
-                          Remove
-                        </button>
+                          {eventUploadingIdx === i
+                            ? "Uploading..."
+                            : event.image
+                              ? "Change Photo"
+                              : "Upload Photo"}
+                          {eventUploadingIdx !== i && (
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handleEventImageUpload(i, e)}
+                            />
+                          )}
+                        </label>
+                        {event.image && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveEventImage(i)}
+                            className="text-xs text-deep-red/70 hover:text-deep-red font-body"
+                          >
+                            Clear Photo
+                          </button>
+                        )}
                       </div>
                     </div>
-                  ) : (
-                    <label className="inline-flex items-center gap-2 border border-dashed border-gold/30 rounded-lg px-4 py-2 cursor-pointer hover:bg-gold/5 transition-colors">
-                      <span className="font-body text-sm text-charcoal/50">
-                        Upload Image
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleEventImageUpload(i, e)}
-                      />
-                    </label>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
